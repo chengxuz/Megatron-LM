@@ -156,7 +156,9 @@ def pretrain(train_valid_test_dataset_provider,
              forward_step_func,
              process_non_loss_data_func=None,
              extra_args_provider=None,
-             args_defaults={}):
+             args_defaults={},
+             post_init_func=None,
+             ):
     """Main training program.
 
     This function will run the followings in the order provided:
@@ -189,6 +191,8 @@ def pretrain(train_valid_test_dataset_provider,
     # Initalize and get arguments, timers, and Tensorboard writer.
     initialize_megatron(extra_args_provider=extra_args_provider,
                         args_defaults=args_defaults)
+    if post_init_func is not None:
+        post_init_func()
 
     args = get_args()
     timers = get_timers()
