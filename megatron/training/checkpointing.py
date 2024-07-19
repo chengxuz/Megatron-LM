@@ -692,7 +692,7 @@ def load_args_from_checkpoint(args, load_arg='load',
     return args, checkpoint_args
 
 
-def load_checkpoint(model, optimizer, opt_param_scheduler, load_arg='load', strict=True):
+def load_checkpoint(model, optimizer, opt_param_scheduler, load_arg='load', strict=True, load_step=None):
     """Load a model checkpoint and return the iteration.
     strict (bool): whether to strictly enforce that the keys in
         :attr:`state_dict` of the checkpoint match the names of
@@ -714,6 +714,8 @@ def load_checkpoint(model, optimizer, opt_param_scheduler, load_arg='load', stri
     model = unwrap_model(model)
 
     load_kwargs = {}
+    if load_step is not None:
+        load_kwargs['checkpoint_step'] = load_step
     is_dist_ckpt = False
     if args.auto_detect_ckpt_format or args.use_dist_ckpt:
         state_dict, checkpoint_name, release = _load_base_checkpoint(load_dir, rank0=True, exit_on_missing_checkpoint=args.exit_on_missing_checkpoint)

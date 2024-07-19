@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Runs the "2.7B" parameter model
+# evaluate the "2.7B" parameter model
 
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
-GPUS_PER_NODE=4
+GPUS_PER_NODE=1
 # Change for multinode config
 MASTER_ADDR=localhost
 MASTER_PORT=6000
@@ -16,7 +16,6 @@ CHECKPOINT_PATH=$1 #<Specify path>
 TENSORBOARD_LOGS_PATH=$2 #<Specify path>
 VOCAB_FILE=$3 #<Specify path to file>/gpt2-vocab.json
 MERGE_FILE=$4 #<Specify path to file>/gpt2-merges.txt
-DATA_PATH=$5 #<Specify path and file prefix>_text_document
 
 DISTRIBUTED_ARGS=(
     --nproc_per_node $GPUS_PER_NODE 
@@ -56,7 +55,6 @@ MODEL_PARALLEL_ARGS=(
 )
 
 DATA_ARGS=(
-    --data-path $DATA_PATH 
     --vocab-file $VOCAB_FILE 
     --merge-file $MERGE_FILE 
     --split 949,50,1
@@ -72,7 +70,7 @@ EVAL_AND_LOGGING_ARGS=(
     --tensorboard-dir $TENSORBOARD_LOGS_PATH 
 )
 
-torchrun ${DISTRIBUTED_ARGS[@]} pretrain_gpt.py \
+MASTER_ADDR=localhost MASTER_PORT=6000 python tasks/use_lm_eval.py \
     ${GPT_MODEL_ARGS[@]} \
     ${TRAINING_ARGS[@]} \
     ${MODEL_PARALLEL_ARGS[@]} \

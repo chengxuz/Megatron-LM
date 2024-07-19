@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Runs the "2.7B" parameter model
+# evaluate the "1.3B" parameter model
 
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
@@ -27,15 +27,15 @@ DISTRIBUTED_ARGS=(
 
 GPT_MODEL_ARGS=(
     --max-position-embeddings 2048
-    --num-layers 32
-    --hidden-size 2560
+    --num-layers 24
+    --hidden-size 2048
     --num-attention-heads 32
-    --seq-length 1024
+    --seq-length 128
 )
 
 TRAINING_ARGS=(
-    --micro-batch-size 8
-    --global-batch-size  128
+    --micro-batch-size 128
+    --global-batch-size 1024
     --train-iters 500000 
     --weight-decay 0.1 
     --adam-beta1 0.9 
@@ -48,6 +48,7 @@ TRAINING_ARGS=(
     --min-lr 6.0e-6
     --lr-warmup-fraction .001 
     --lr-decay-iters 430000 
+    --tokenizer-type GPT2BPETokenizer
 )
 
 MODEL_PARALLEL_ARGS=(
@@ -72,7 +73,8 @@ EVAL_AND_LOGGING_ARGS=(
     --tensorboard-dir $TENSORBOARD_LOGS_PATH 
 )
 
-torchrun ${DISTRIBUTED_ARGS[@]} pretrain_gpt.py \
+#torchrun ${DISTRIBUTED_ARGS[@]} pretrain_gpt.py \
+MASTER_ADDR=localhost MASTER_PORT=6000 python tasks/use_lm_eval.py \
     ${GPT_MODEL_ARGS[@]} \
     ${TRAINING_ARGS[@]} \
     ${MODEL_PARALLEL_ARGS[@]} \

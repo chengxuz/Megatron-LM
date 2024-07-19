@@ -31,3 +31,28 @@ bash examples/gpt3/train_gpt2_345m.sh "/om2/user/chengxuz/megatron_related/gpt_t
 ```
 export ROOT_DIR="/om2/user/chengxuz/megatron_related" ; bash examples/gpt3/train_gpt2_1d3b.sh "${ROOT_DIR}/gpt_test_train/gpt2_1d3b/ckpts" "${ROOT_DIR}/gpt_test_train/gpt2_1d3b/tensorboards" "${ROOT_DIR}/gpt_ckpts/gpt2-vocab.json" "${ROOT_DIR}/gpt_ckpts/gpt2-merges.txt" "/om2/group/evlab/llm_dataset/Megatron_datasets/pile/hf_dedp_data/pile_up_to_165-of-01650_text_document"
 ```
+
+# Evaluation related 
+
+## How to build Sandbox from sif file
+
+```
+singularity build --sandbox /om2/user/chengxuz/docker_images/megatron_sbox /om2/user/chengxuz/docker_images/pytorch_24.06-py3.sif
+```
+Sandbox is needed for installing additional repos. Otherwise, you will get a No Space Left error when installing.
+
+## How to run the sandbox file to install additional repo
+
+```
+export TMPDIR='/om2/user/chengxuz/tmp' ; singularity shell -B /om,/om2 --nv /om2/user/chengxuz/docker_images/megatron_sbox
+```
+This TMPDIR may not be needed. But just to be safe.
+
+To get the cuda right, I need to do `ln -s lib.real lib` in the `/om2/user/chengxuz/docker_images/megatron_sbox/usr/local/cuda-12.5/compat/` folder.
+
+
+## Test evaluation command
+
+```
+export ROOT_DIR="/om2/user/chengxuz/megatron_related" ; bash examples/gpt3/eval_gpt2_1d3b.sh "${ROOT_DIR}/gpt_test_train/gpt2_1d3b/ckpts" "${ROOT_DIR}/gpt_test_train/gpt2_1d3b/tensorboards" "${ROOT_DIR}/gpt_ckpts/gpt2-vocab.json" "${ROOT_DIR}/gpt_ckpts/gpt2-merges.txt" "/om2/group/evlab/llm_dataset/Megatron_datasets/pile/hf_dedp_data/pile_up_to_165-of-01650_text_document"
+```

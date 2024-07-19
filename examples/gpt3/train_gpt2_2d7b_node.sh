@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# Runs the "2.7B" parameter model
+# Runs the "1.3B" parameter model
 
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
 GPUS_PER_NODE=4
 # Change for multinode config
-MASTER_ADDR=localhost
+MASTER_ADDR=node103
 MASTER_PORT=6000
-NUM_NODES=1
-NODE_RANK=0
+NUM_NODES=2
+NODE_RANK=1
 WORLD_SIZE=$(($GPUS_PER_NODE*$NUM_NODES))
 
 CHECKPOINT_PATH=$1 #<Specify path>
