@@ -104,6 +104,10 @@ def get_tasks_args(parser):
                        help='Task name.')
     group.add_argument('--overwrite', default=False, action='store_true',
                        help='Task name.')
+    group.add_argument(
+            '--setting', 
+            default=None, type=str, 
+            action='store')
     return parser
 
 

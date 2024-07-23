@@ -32,6 +32,13 @@ bash examples/gpt3/train_gpt2_345m.sh "/om2/user/chengxuz/megatron_related/gpt_t
 export ROOT_DIR="/om2/user/chengxuz/megatron_related" ; bash examples/gpt3/train_gpt2_1d3b.sh "${ROOT_DIR}/gpt_test_train/gpt2_1d3b/ckpts" "${ROOT_DIR}/gpt_test_train/gpt2_1d3b/tensorboards" "${ROOT_DIR}/gpt_ckpts/gpt2-vocab.json" "${ROOT_DIR}/gpt_ckpts/gpt2-merges.txt" "/om2/group/evlab/llm_dataset/Megatron_datasets/pile/hf_dedp_data/pile_up_to_165-of-01650_text_document"
 ```
 
+## General train
+
+Something like below:
+```
+sbatch --job-name=gpt2_2d7b --export=SETTING="baselines.py:change_to_2d7b_from_1d3b",NUM_GPUS=8 sb_scripts/train_gnrl.sh
+```
+
 # Evaluation related 
 
 ## How to build Sandbox from sif file
@@ -55,4 +62,10 @@ To get the cuda right, I need to do `ln -s lib.real lib` in the `/om2/user/cheng
 
 ```
 export ROOT_DIR="/om2/user/chengxuz/megatron_related" ; bash examples/gpt3/eval_gpt2_1d3b.sh "${ROOT_DIR}/gpt_test_train/gpt2_1d3b/ckpts" "${ROOT_DIR}/gpt_test_train/gpt2_1d3b/tensorboards" "${ROOT_DIR}/gpt_ckpts/gpt2-vocab.json" "${ROOT_DIR}/gpt_ckpts/gpt2-merges.txt" "/om2/group/evlab/llm_dataset/Megatron_datasets/pile/hf_dedp_data/pile_up_to_165-of-01650_text_document"
+```
+
+## General Test command
+
+```
+bash examples/gpt3/gnrl_eval_from_1d3b.sh --setting "baselines.py:change_to_w1d7b_from_1d3b"
 ```

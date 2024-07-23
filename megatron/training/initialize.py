@@ -5,6 +5,7 @@ import logging
 import random
 import os
 import time
+import importlib
 
 import numpy as np
 import torch
@@ -23,6 +24,24 @@ from megatron.legacy.model.transformer import bias_dropout_add_fused_train
 from megatron.legacy.model.fused_bias_gelu import bias_gelu
 
 logger = logging.getLogger(__name__)
+
+
+def get_setting_func(setting):
+    assert len(setting.split(':')) == 2, \
+            'Setting should be "script_path:func_name"'
+    script_path, func_name = setting.split(':')
+    assert script_path.endswith('.py'), \
+            'Script should end with ".py"'
+    module_name = script_path[:-3].replace('/', '.')
+    while module_name.startswith('.'):
+        module_name = module_name[1:]
+    try:
+        load_setting_module = importlib.import_module(module_name)
+    except:
+        module_name = 'megatron.configs.' + module_name
+        load_setting_module = importlib.import_module(module_name)
+    setting_func = getattr(load_setting_module, func_name)
+    return setting_func
 
 
 def initialize_megatron(
@@ -46,6 +65,12 @@ def initialize_megatron(
 
     # Parse arguments
     args = parse_args(extra_args_provider, ignore_unknown_args)
+
+    setting_name = getattr(args, 'setting', None)
+    if (setting_name is not None) and (setting_name != 'None'):
+        setting_func = get_setting_func(
+                setting_name)
+        args = setting_func(args)
 
     if args.use_checkpoint_args or args_defaults.get("use_checkpoint_args", False):
         assert args.load is not None, "--use-checkpoints-args requires --load argument"
