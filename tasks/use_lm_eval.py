@@ -282,3 +282,4 @@ if __name__ == '__main__':
         args.consumed_train_samples = 0
         args.consumed_valid_samples = 0
         set_args(args)
+    torch.distributed.destroy_process_group()

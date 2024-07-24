@@ -11,7 +11,7 @@
 #INNER_NUM_GPUS="${NUM_GPUS:-1}"
 
 cd /om2/user/chengxuz/repos/Megatron-LM/
-singularity exec\
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True singularity exec\
     --writable-tmpfs -B /om,/om2 --nv /om2/user/chengxuz/docker_images/pytorch_24.06-py3.copy1.sif\
     bash examples/gpt3/gnrl_pretrain_from_1d3b.sh --setting ${SETTING}
 # "baselines.py:change_to_1d7b_from_1d3b"

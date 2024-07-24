@@ -24,9 +24,8 @@ def change_to_w1d7b_from_1d3b(args):
     args.hidden_size = args.kv_channels * 32
     args.ffn_hidden_size = args.hidden_size * 4
     args.micro_batch_size = 8
-    args.global_batch_size = 64 # it was run as 64 at the beginning
     args = name_keyword_change(
-            args, new_name='w1d7b')
+            args, new_name='w1d7b_2')
     return args
 
 def change_to_2d7b_from_1d3b(args):
