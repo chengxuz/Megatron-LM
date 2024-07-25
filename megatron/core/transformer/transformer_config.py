@@ -280,8 +280,14 @@ class TransformerConfig(ModelParallelConfig):
     enable_cuda_graph: bool = False
     """When set to true, TransformerLayer blocks are wrapped with CUDA graph."""
 
+    ####################
+    # Attention copy related 
+    ####################
     return_qk: bool = False
     """When set to true, the model will return all queries and keys."""
+
+    att_sub_method: str = None
+    """Controls how the attention scores are sampled."""
 
     def __post_init__(self):
         """ Python dataclass method that is used to modify attributes after initialization.

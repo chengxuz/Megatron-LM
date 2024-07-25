@@ -187,6 +187,10 @@ class TransformerBlock(MegatronModule):
     def _get_layer(self, layer_number: int):
         return self.layers[layer_number]
 
+    def get_layer_add_fwd_kwargs(
+            self, layer_number: int):
+        return {}
+
     def _checkpointed_forward(
         self,
         hidden_states: Tensor,
@@ -209,15 +213,16 @@ class TransformerBlock(MegatronModule):
             ):
                 for index in range(start, end):
                     layer = self._get_layer(index)
+                    add_kwargs = self.get_layer_add_fwd_kwargs(index)
                     layer_output = layer(
-                        hidden_states=hidden_states,
-                        attention_mask=attention_mask,
-                        context=context,
-                        context_mask=context_mask,
-                        rotary_pos_emb=rotary_pos_emb,
-                        inference_params=None,
-                        packed_seq_params=packed_seq_params,
-                    )
+                            hidden_states=hidden_states,
+                            attention_mask=attention_mask,
+                            context=context,
+                            context_mask=context_mask,
+                            rotary_pos_emb=rotary_pos_emb,
+                            inference_params=None,
+                            packed_seq_params=packed_seq_params,
+                            **add_kwargs)
                     hidden_states, context = self.unpack_layer_output(
                             layer_output)
                 return hidden_states, context
@@ -394,15 +399,16 @@ class TransformerBlock(MegatronModule):
                 for l_no, layer in enumerate(self.layers):
                     with self.offload_context:
                         if (len(self.cuda_graphs) == 0) or (not self.training):
+                            add_kwargs = self.get_layer_add_fwd_kwargs(l_no)
                             layer_output = layer(
-                                hidden_states=hidden_states,
-                                attention_mask=attention_mask,
-                                context=context,
-                                context_mask=context_mask,
-                                rotary_pos_emb=rotary_pos_emb,
-                                inference_params=inference_params,
-                                packed_seq_params=packed_seq_params,
-                            )
+                                    hidden_states=hidden_states,
+                                    attention_mask=attention_mask,
+                                    context=context,
+                                    context_mask=context_mask,
+                                    rotary_pos_emb=rotary_pos_emb,
+                                    inference_params=inference_params,
+                                    packed_seq_params=packed_seq_params,
+                                    **add_kwargs)
                             hidden_states, context = self.unpack_layer_output(
                                     layer_output)
                             # CUDA graph doesn't output context and is expected to be None
@@ -484,3 +490,25 @@ class TransformerBlock(MegatronModule):
                 )
 
         return sharded_state_dict
+
+
+class AttCopyTransformerBlock(TransformerBlock):
+    def get_layer_add_fwd_kwargs(
+            self, layer_number: int):
+        return {
+                'query': self.teacher_qs[layer_number],
+                'key': self.teacher_ks[layer_number],
+                }
+
+    def forward(
+            self,
+            teacher_qs: List[Tensor],
+            teacher_ks: List[Tensor],
+            *args, **kwargs):
+        self.teacher_qs = teacher_qs
+        self.teacher_ks = teacher_ks
+
+        fwd_res = super().forward(*args, **kwargs)
+        self.teacher_qs = None
+        self.teacher_ks = None
+        return fwd_res

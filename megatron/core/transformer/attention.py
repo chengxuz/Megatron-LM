@@ -37,6 +37,14 @@ class SelfAttentionSubmodules:
     q_layernorm: Union[ModuleSpec, type] = None
     k_layernorm: Union[ModuleSpec, type] = None
 
+@dataclass
+class AttCopySelfAttentionSubmodules:
+    linear_v: Union[ModuleSpec, type] = None
+    core_attention: Union[ModuleSpec, type] = None
+    linear_proj: Union[ModuleSpec, type] = None
+    q_layernorm: Union[ModuleSpec, type] = None
+    k_layernorm: Union[ModuleSpec, type] = None
+
 
 @dataclass
 class CrossAttentionSubmodules:
@@ -513,6 +521,132 @@ class SelfAttention(Attention):
             self.run_realtime_tests()
 
         return query, key, value
+
+
+class AttCopySelfAttention(Attention):
+    """Self-attention layer class
+
+    Self-attention layer takes input with size [s, b, h]
+    and returns output of the same size.
+    """
+
+    def __init__(
+        self,
+        config: TransformerConfig,
+        submodules: SelfAttentionSubmodules,
+        layer_number: int,
+        attn_mask_type=AttnMaskType.padding,
+    ):
+        super().__init__(
+            config=config,
+            submodules=submodules,
+            layer_number=layer_number,
+            attn_mask_type=attn_mask_type,
+            attention_type="self",
+        )
+
+        self.linear_v = build_module(
+            submodules.linear_v,
+            self.config.hidden_size,
+            self.kv_projection_size,
+            config=self.config,
+            init_method=self.config.init_method,
+            gather_output=False,
+            bias=self.config.add_bias_linear or self.config.add_qkv_bias,
+            skip_bias_add=False,
+            is_expert=False,
+            tp_comm_buffer_name='v',
+        )
+
+    def get_value_tensor(self, hidden_states, key_value_states=None):
+        """
+        Derives `query`, `key` and `value` tensors from `hidden_states`.
+        """
+        # Attention heads [sq, b, h] --> [sq, b, ng * (np/ng + 2) * hn)]
+        value, _ = self.linear_v(hidden_states)
+
+        # [sq, b, hp] --> [sq, b, ng, (np/ng + 2) * hn]
+        new_tensor_shape = mixed_qkv.size()[:-1] + (
+            self.num_query_groups_per_partition,
+            self.hidden_size_per_attention_head,
+        )
+        value = value.view(*new_tensor_shape)
+        return value
+
+    def forward(
+        self,
+        hidden_states,
+        query,
+        key,
+        attention_mask,
+        key_value_states=None,
+        inference_params=None,
+        rotary_pos_emb=None,
+        packed_seq_params=None,
+    ):
+        # hidden_states: [sq, b, h]
+
+        # For self attention we just duplicate the rotary_pos_emb if it isn't already
+        if rotary_pos_emb is not None and not isinstance(rotary_pos_emb, tuple):
+            rotary_pos_emb = (rotary_pos_emb,) * 2
+
+        # =====================
+        # Query, Key, and Value
+        # =====================
+        # Get the query, key and value tensors based on the type of attention -
+        # self or cross attn.
+        value = self.get_value_tensor(hidden_states, key_value_states)
+
+        # ===================================================
+        # Adjust key, value, and rotary_pos_emb for inference
+        # ===================================================
+        _, value, rotary_pos_emb, attn_mask_type = self._adjust_key_value_for_inference(
+            inference_params, key, value, rotary_pos_emb
+        )
+
+        if packed_seq_params is not None:
+            value = value.squeeze(1)
+
+        # ==================================
+        # core attention computation
+        # ==================================
+
+        if self.checkpoint_core_attention and self.training:
+            core_attn_out = self._checkpointed_attention_forward(
+                query,
+                key,
+                value,
+                attention_mask,
+                attn_mask_type=attn_mask_type,
+                packed_seq_params=packed_seq_params,
+            )
+        else:
+            core_attn_out = self.core_attention(
+                query,
+                key,
+                value,
+                attention_mask,
+                attn_mask_type=attn_mask_type,
+                packed_seq_params=packed_seq_params,
+            )
+
+        if packed_seq_params is not None:
+            # reshape to same output shape as unpacked case
+            # (t, np, hn) -> (t, b=1, h=np*hn)
+            # t is the pack size = sum (sq_i)
+            # note that batch is a dummy dimension in the packed case
+            core_attn_out = core_attn_out.reshape(core_attn_out.size(0), 1, -1)
+
+        # =================
+        # Output. [sq, b, h]
+        # =================
+
+        output, bias = self.linear_proj(core_attn_out)
+
+        if self.get_cfg_val('return_qk'):
+            return output, bias, query, key
+        else:
+            return output, bias
 
 
 class CrossAttention(Attention):

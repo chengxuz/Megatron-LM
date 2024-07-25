@@ -14,8 +14,9 @@ from megatron.core import parallel_state, tensor_parallel
 from megatron.training.checkpointing import load_checkpoint
 from megatron.training import get_model
 from megatron.inference.text_generation.generation import _build_attention_mask_and_position_ids
+from megatron.core.models.gpt.model_providers import model_provider
 
-from tasks.use_lm_eval import get_model_provider, get_tasks_args
+from tasks.use_lm_eval import get_tasks_args
 import torch
 import numpy as np
 
@@ -30,11 +31,21 @@ def main():
     args.return_qk = True
     set_args(args)
 
+    teacher_model = get_model(
+            model_provider,
+            wrap_with_ddp=False)
+    teacher_model = teacher_model[0]
+    tokenizer = get_tokenizer()
+
+    args.attention_copy = True
+    args.return_qk = False
+    set_args(args)
+
     model = get_model(
-            get_model_provider(),
+            model_provider,
             wrap_with_ddp=False)
     model = model[0]
-    tokenizer = get_tokenizer()
+    model.teacher_model = teacher_model
 
     input_tokens = tokenizer.tokenize('I am a cat walking on a ')
     input_tokens = torch.from_numpy(np.asarray([input_tokens])).cuda()

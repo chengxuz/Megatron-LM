@@ -3,6 +3,7 @@
 import logging
 from typing import Dict, Literal, Optional, Tuple, Union
 
+import numpy as np
 import torch
 from torch import Tensor
 
@@ -14,7 +15,7 @@ from megatron.core.models.common.language_module.language_module import Language
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import AttnMaskType, ModelType
 from megatron.core.transformer.spec_utils import ModuleSpec
-from megatron.core.transformer.transformer_block import TransformerBlock
+from megatron.core.transformer.transformer_block import TransformerBlock, AttCopyTransformerBlock
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.utils import make_tp_sharded_tensor_for_checkpoint
 
@@ -92,7 +93,7 @@ class GPTModel(LanguageModule):
             )
 
         # Transformer.
-        self.decoder = TransformerBlock(
+        self.decoder = self.get_block_class()(
             config=self.config,
             spec=transformer_layer_spec,
             pre_process=self.pre_process,
@@ -131,6 +132,9 @@ class GPTModel(LanguageModule):
 
         if self.pre_process or self.post_process:
             self.setup_embeddings_and_output_layer()
+
+    def get_block_class(self):
+        return TransformerBlock
 
     def set_input_tensor(self, input_tensor: Tensor) -> None:
         """Sets input tensor to the model.
@@ -244,3 +248,118 @@ class GPTModel(LanguageModule):
         ), f'Expected output layer extra state to be empty, got: {output_extra_state}'
 
         return sharded_state_dict
+
+
+class AttCopyGPTModel(GPTModel):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.teacher_model = None
+        att_sub_method = self.get_cfg_val('att_sub_method')
+        self.att_layer_random_methods = [
+                'layer_random_forth_6',
+                ]
+        if att_sub_method in self.att_layer_random_methods:
+            if att_sub_method.endswith('_s1'):
+                np.random.seed(1)
+            else:
+                np.random.seed(0)
+            if att_sub_method in [
+                    'layer_random_forth_6',
+                    ]:
+                self.att_sub_layer_rd_idxs = list(
+                        np.random.choice(
+                            list(range(18, 24)),
+                            self.config.num_layers))
+            else:
+                raise NotImplementedError
+
+    def get_block_class(self):
+        return AttCopyTransformerBlock
+
+    def forward(
+        self,
+        input_ids: Tensor,
+        position_ids: Tensor,
+        attention_mask: Tensor,
+        decoder_input: Tensor = None,
+        labels: Tensor = None,
+        inference_params: InferenceParams = None,
+        packed_seq_params: PackedSeqParams = None,
+        extra_block_kwargs: dict = None,
+    ) -> Tensor:
+        """Forward function of the GPT Model This function passes the input tensors
+        through the embedding layer, and then the decoeder and finally into the post
+        processing layer (optional).
+
+        It either returns the Loss values if labels are given or the final hidden units
+        Copy the attention from the teacher
+        """
+        # If decoder_input is provided (not None), then input_ids and position_ids are ignored.
+        # Otherwise, apply embedding layer on input_ids and position_ids to get decoder_input.
+
+        _, teacher_qs, teacher_ks = self.teacher_model(
+                input_ids=input_ids,
+                position_ids=position_ids,
+                attention_mask=attention_mask,
+                decoder_input=decoder_input,
+                inference_params=inference_params,
+                packed_seq_params=packed_seq_params,
+                extra_block_kwargs=extra_block_kwargs,
+                )
+        att_sub_method = self.get_cfg_val('att_sub_method')
+        if att_sub_method in self.att_layer_random_methods:
+            teacher_qs = [
+                    teacher_qs[_idx]\
+                    for _idx in self.att_sub_layer_rd_idxs]
+            teacher_ks = [
+                    teacher_ks[_idx]\
+                    for _idx in self.att_sub_layer_rd_idxs]
+
+        # Decoder embedding.
+        if decoder_input is not None:
+            pass
+        elif self.pre_process:
+            decoder_input = self.embedding(input_ids=input_ids, position_ids=position_ids)
+        else:
+            # intermediate stage of pipeline
+            # decoder will get hidden_states from encoder.input_tensor
+            decoder_input = None
+
+        # Rotary positional embeddings (embedding is None for PP intermediate devices)
+        rotary_pos_emb = None
+        if self.position_embedding_type == 'rope':
+            rotary_seq_len = self.rotary_pos_emb.get_rotary_seq_len(
+                inference_params, self.decoder, decoder_input, self.config
+            )
+            rotary_pos_emb = self.rotary_pos_emb(rotary_seq_len)
+
+        # Run decoder.
+        hidden_states = self.decoder(
+            hidden_states=decoder_input,
+            attention_mask=attention_mask,
+            inference_params=inference_params,
+            rotary_pos_emb=rotary_pos_emb,
+            packed_seq_params=packed_seq_params,
+            teacher_qs=teacher_qs,
+            teacher_ks=teacher_ks,
+            **(extra_block_kwargs or {}),
+        )
+
+        if not self.post_process:
+            return hidden_states
+
+        # logits and loss
+        output_weight = None
+        if self.share_embeddings_and_output_weights:
+            output_weight = self.shared_embedding_or_output_weight()
+        logits, _ = self.output_layer(hidden_states, weight=output_weight)
+
+        if labels is None:
+            # [s b h] => [b s h]
+            ret_logits = logits.transpose(0, 1).contiguous()
+            return ret_logits
+
+        loss = self.compute_language_model_loss(labels, logits)
+
+        return loss
