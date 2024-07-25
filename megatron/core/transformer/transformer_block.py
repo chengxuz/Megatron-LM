@@ -209,7 +209,7 @@ class TransformerBlock(MegatronModule):
             ):
                 for index in range(start, end):
                     layer = self._get_layer(index)
-                    hidden_states, context = layer(
+                    layer_output = layer(
                         hidden_states=hidden_states,
                         attention_mask=attention_mask,
                         context=context,
@@ -218,6 +218,13 @@ class TransformerBlock(MegatronModule):
                         inference_params=None,
                         packed_seq_params=packed_seq_params,
                     )
+                    if self.get_cfg_val('return_qk'):
+                        hidden_states, context, now_q, now_k\
+                                = layer_output
+                        self.all_qs.append(now_q)
+                        self.all_ks.append(now_k)
+                    else:
+                        hidden_states, context = layer_output
                 return hidden_states, context
 
             return custom_forward
@@ -335,6 +342,8 @@ class TransformerBlock(MegatronModule):
         hidden_states = make_viewless_tensor(
             inp=hidden_states, requires_grad=True, keep_graph=True,
         )
+        if self.get_cfg_val('return_qk'):
+            self.all_qs, self.all_ks = [], []
 
         if self.config.sequence_parallel:
             rng_context = tensor_parallel.get_cuda_rng_tracker().fork()
@@ -418,7 +427,14 @@ class TransformerBlock(MegatronModule):
         if self.post_process and self.post_layer_norm:
             hidden_states = self.final_layernorm(hidden_states)
 
-        return hidden_states
+        if self.get_cfg_val('return_qk'):
+            all_qs = self.all_qs
+            all_ks = self.all_ks
+            self.all_qs = None
+            self.all_ks = None
+            return hidden_states, all_qs, all_ks
+        else:
+            return hidden_states
 
     def sharded_state_dict(
         self, prefix: str = '', sharded_offsets: tuple = (), metadata: dict = None

@@ -334,7 +334,10 @@ class Attention(MegatronModule, ABC):
 
         output, bias = self.linear_proj(core_attn_out)
 
-        return output, bias
+        if self.get_cfg_val('return_qk'):
+            return output, bias, query, key
+        else:
+            return output, bias
 
 
 class SelfAttention(Attention):

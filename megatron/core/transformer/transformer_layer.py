@@ -183,6 +183,10 @@ class TransformerLayer(MegatronModule, BaseTransformerLayer):
             packed_seq_params=packed_seq_params,
         )
 
+        if self.get_cfg_val('return_qk'):
+            output, bias, query, key = attention_output_with_bias
+            attention_output_with_bias = output, bias
+
         # TODO: could we move `bias_dropout_add_exec_handler` itself
         # inside the module provided in the `bias_dropout_add_spec` module?
         with self.bias_dropout_add_exec_handler():
@@ -240,7 +244,10 @@ class TransformerLayer(MegatronModule, BaseTransformerLayer):
             inp=hidden_states, requires_grad=hidden_states.requires_grad, keep_graph=True
         )
 
-        return output, context
+        if self.get_cfg_val('return_qk'):
+            return output, context, query, key
+        else:
+            return output, context
 
     def sharded_state_dict(
         self, prefix: str = '', sharded_offsets: tuple = (), metadata: Optional[dict] = None

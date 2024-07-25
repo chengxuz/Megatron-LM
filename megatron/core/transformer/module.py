@@ -95,6 +95,9 @@ class MegatronModule(torch.nn.Module):
             if hasattr(m, "is_first_microbatch"):
                 m.is_first_microbatch = True
 
+    def get_cfg_val(self, val_key, default_val=None):
+        return getattr(self.config, val_key, default_val)
+
 
 def conversion_helper(val, conversion):
     if not isinstance(val, (tuple, list)):
