@@ -43,6 +43,7 @@ def main():
                 attention_mask=attention_mask,
                 )
     ipdb.set_trace()
+    torch.distributed.destroy_process_group()
 
 
 if __name__ == '__main__':
