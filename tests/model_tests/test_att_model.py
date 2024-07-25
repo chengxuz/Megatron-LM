@@ -16,6 +16,8 @@ from megatron.training import get_model
 from megatron.inference.text_generation.generation import _build_attention_mask_and_position_ids
 
 from tasks.use_lm_eval import get_model_provider, get_tasks_args
+import torch
+import numpy as np
 
 
 def main():
@@ -31,12 +33,15 @@ def main():
     model = get_model(
             get_model_provider(),
             wrap_with_ddp=False)
+    model = model[0]
     tokenizer = get_tokenizer()
 
     input_tokens = tokenizer.tokenize('I am a cat walking on a ')
+    input_tokens = torch.from_numpy(np.asarray([input_tokens])).cuda()
+    #ipdb.set_trace()
     with torch.no_grad():
         attention_mask, position_ids = _build_attention_mask_and_position_ids(
-                inps)
+                input_tokens)
         model_outputs = model(
                 input_tokens,
                 position_ids=position_ids,

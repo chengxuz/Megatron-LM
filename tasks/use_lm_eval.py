@@ -49,7 +49,8 @@ def get_model_provider():
     def model_provider(pre_process=True, post_process=True):
         """Build the model."""
 
-        config = core_transformer_config_from_args(get_args())
+        args = get_args()
+        config = core_transformer_config_from_args(args)
         use_te = args.transformer_impl == "transformer_engine"
 
         print_rank_0('building GPT model ...')
