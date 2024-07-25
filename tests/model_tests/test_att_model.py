@@ -29,7 +29,7 @@ def main():
     set_args(args)
 
     model = get_model(
-            get_model_provider(post_process=False),
+            get_model_provider(),
             wrap_with_ddp=False)
     tokenizer = get_tokenizer()
 

@@ -199,6 +199,9 @@ class GPTModel(LanguageModule):
         if not self.post_process:
             return hidden_states
 
+        if self.get_cfg_val('return_qk'):
+            hidden_states, all_qs, all_ks = hidden_states
+
         # logits and loss
         output_weight = None
         if self.share_embeddings_and_output_weights:
@@ -207,7 +210,11 @@ class GPTModel(LanguageModule):
 
         if labels is None:
             # [s b h] => [b s h]
-            return logits.transpose(0, 1).contiguous()
+            ret_logits = logits.transpose(0, 1).contiguous()
+            if self.get_cfg_val('return_qk'):
+                return ret_logits, all_qs, all_ks
+            else:
+                return ret_logits
 
         loss = self.compute_language_model_loss(labels, logits)
 
