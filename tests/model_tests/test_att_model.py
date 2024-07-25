@@ -15,7 +15,7 @@ from megatron.training.checkpointing import load_checkpoint
 from megatron.training import get_model
 from megatron.inference.text_generation.generation import _build_attention_mask_and_position_ids
 
-from tasks.use_lm_eval import model_provider 
+from tasks.use_lm_eval import get_model_provider, get_tasks_args
 
 
 def main():
