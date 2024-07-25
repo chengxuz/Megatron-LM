@@ -218,13 +218,8 @@ class TransformerBlock(MegatronModule):
                         inference_params=None,
                         packed_seq_params=packed_seq_params,
                     )
-                    if self.get_cfg_val('return_qk'):
-                        hidden_states, context, now_q, now_k\
-                                = layer_output
-                        self.all_qs.append(now_q)
-                        self.all_ks.append(now_k)
-                    else:
-                        hidden_states, context = layer_output
+                    hidden_states, context = self.unpack_layer_output(
+                            layer_output)
                 return hidden_states, context
 
             return custom_forward
@@ -296,6 +291,16 @@ class TransformerBlock(MegatronModule):
             raise ValueError("Invalid activation recompute method.")
 
         return hidden_states
+
+    def unpack_layer_output(self, layer_output):
+        if self.get_cfg_val('return_qk'):
+            hidden_states, context, now_q, now_k\
+                    = layer_output
+            self.all_qs.append(now_q)
+            self.all_ks.append(now_k)
+        else:
+            hidden_states, context = layer_output
+        return hidden_states, context
 
     def set_input_tensor(self, input_tensor: Tensor):
         """Set input tensor to be used instead of forward()'s input.
@@ -389,7 +394,7 @@ class TransformerBlock(MegatronModule):
                 for l_no, layer in enumerate(self.layers):
                     with self.offload_context:
                         if (len(self.cuda_graphs) == 0) or (not self.training):
-                            hidden_states, context = layer(
+                            layer_output = layer(
                                 hidden_states=hidden_states,
                                 attention_mask=attention_mask,
                                 context=context,
@@ -398,6 +403,8 @@ class TransformerBlock(MegatronModule):
                                 inference_params=inference_params,
                                 packed_seq_params=packed_seq_params,
                             )
+                            hidden_states, context = self.unpack_layer_output(
+                                    layer_output)
                             # CUDA graph doesn't output context and is expected to be None
                             assert (
                                 (context is None)
