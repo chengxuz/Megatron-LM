@@ -39,9 +39,11 @@ def main():
 
     args.attention_copy = True
     args.return_qk = False
+
     args.kv_channels = 32
     args.hidden_size = args.kv_channels * 32
     args.ffn_hidden_size = args.hidden_size * 4
+
     args.att_sub_method = 'layer_random_forth_6'
     set_args(args)
 

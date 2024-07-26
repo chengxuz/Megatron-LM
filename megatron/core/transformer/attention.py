@@ -25,6 +25,7 @@ from megatron.core.transformer.module import MegatronModule
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.utils import divide
+from megatron.training.global_vars import DEBUG
 
 from .enums import AttnMaskType
 from .transformer_config import TransformerConfig
@@ -615,6 +616,17 @@ class AttCopySelfAttention(Attention):
         # core attention computation
         # ==================================
 
+        if value.shape != key.shape:
+            assert value.shape[:-1] == key.shape[:-1]
+            diff_dim = key.shape[-1] - value.shape[-1]
+            assert diff_dim > 0
+            diff_shape = value.shape[:-1] + (diff_dim,)
+            value = torch.cat(
+                    [value, torch.zeros(diff_shape, dtype=value.dtype, device=value.device)],
+                    dim=-1)
+        else:
+            diff_shape = None
+
         if self.checkpoint_core_attention and self.training:
             core_attn_out = self._checkpointed_attention_forward(
                 query,
@@ -641,6 +653,14 @@ class AttCopySelfAttention(Attention):
             # note that batch is a dummy dimension in the packed case
             core_attn_out = core_attn_out.reshape(core_attn_out.size(0), 1, -1)
 
+        if diff_shape is not None:
+            core_attn_out = core_attn_out.reshape(*value.shape)
+            core_attn_out, _ = torch.split(
+                    core_attn_out,
+                    [value.shape[-1] - diff_shape[-1], diff_shape[-1]],
+                    dim=-1)
+            core_attn_out = core_attn_out.reshape(
+                    core_attn_out.shape[0], core_attn_out.shape[1], -1)
         # =================
         # Output. [sq, b, h]
         # =================

@@ -11,6 +11,10 @@ from megatron.core import Timers
 from megatron.training.tokenizer import build_tokenizer
 from .microbatches import build_num_microbatches_calculator
 
+DEBUG = int(os.environ.get(
+        'DEBUG',
+        '0')) == 1
+
 _GLOBAL_ARGS = None
 _GLOBAL_NUM_MICROBATCHES_CALCULATOR = None
 _GLOBAL_TOKENIZER = None

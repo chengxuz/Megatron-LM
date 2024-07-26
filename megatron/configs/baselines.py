@@ -50,3 +50,25 @@ def change_to_att1d3b_from_1d3b(args):
     args = name_keyword_change(
             args, new_name='att1d3b')
     return args
+
+
+def change_to_att1d3bctl_from_1d3b(args):
+    #args.att_sub_method = 'layer_random_forth_6'
+    args.attention_copy = True
+    args.attention_teacher = '1d3b_frozen'
+    args = name_keyword_change(
+            args, new_name='att1d3bctl')
+    return args
+
+
+def change_to_att1d3bhlf_from_1d3b(args):
+    args.kv_channels = 32
+    args.hidden_size = args.kv_channels * 32
+    args.ffn_hidden_size = args.hidden_size * 4
+
+    args.att_sub_method = 'layer_random_forth_6'
+    args.attention_copy = True
+    args.attention_teacher = '1d3b_frozen'
+    args = name_keyword_change(
+            args, new_name='att1d3bhlf')
+    return args
