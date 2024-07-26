@@ -113,7 +113,7 @@ def load_attention_teacher(teacher_name):
             '1d3b_frozen', '1d3b',
             '1d3b_scratch']:
         teacher_args_path = os.path.join(
-                megatron_meta_dir, 'gpt_test_train/gpt2_1d7b/typical_args.pkl')
+                megatron_meta_dir, 'gpt_test_train/gpt2_1d3b/typical_args.pkl')
         if teacher_name != '1d3b_scratch':
             load_step = 440000
         else:
