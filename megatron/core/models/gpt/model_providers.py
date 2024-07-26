@@ -109,10 +109,15 @@ def model_provider(pre_process=True, post_process=True) -> Union[GPTModel, megat
 def load_attention_teacher(teacher_name):
     orig_args = get_args()
     megatron_meta_dir = '/om2/user/chengxuz/megatron_related'
-    if teacher_name in ['1d3b_frozen']:
+    if teacher_name in [
+            '1d3b_frozen', '1d3b',
+            '1d3b_scratch']:
         teacher_args_path = os.path.join(
                 megatron_meta_dir, 'gpt_test_train/gpt2_1d7b/typical_args.pkl')
-        load_step = 440000
+        if teacher_name != '1d3b_scratch':
+            load_step = 440000
+        else:
+            load_step = None
     teacher_args = pickle.load(open(teacher_args_path, 'rb'))
     teacher_args.return_qk = True
     set_args(teacher_args)
@@ -120,9 +125,10 @@ def load_attention_teacher(teacher_name):
     teacher_model = get_model(
             model_provider,
             wrap_with_ddp=False)
-    teacher_args.iteration, teacher_args.num_floating_point_operations_so_far = load_checkpoint(
-        teacher_model, optimizer=None, opt_param_scheduler=None,
-        load_step=load_step)
+    if load_step is not None:
+        teacher_args.iteration, teacher_args.num_floating_point_operations_so_far = load_checkpoint(
+            teacher_model, optimizer=None, opt_param_scheduler=None,
+            load_step=load_step)
     teacher_model = teacher_model[0].module
     if teacher_name in ['1d3b_frozen']:
         for param in teacher_model.parameters():

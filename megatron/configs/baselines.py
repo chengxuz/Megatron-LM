@@ -72,3 +72,18 @@ def change_to_att1d3bhlf_from_1d3b(args):
     args = name_keyword_change(
             args, new_name='att1d3bhlf')
     return args
+
+
+def change_to_att1d3bhlftrn_from_1d3b(args):
+    args = change_to_att1d3bhlf_from_1d3b(args)
+    args.attention_teacher = '1d3b'
+    args = name_keyword_change(
+            args, new_name='att1d3bhlftrn')
+    return args
+
+def change_to_att1d3bhlfsch_from_1d3b(args):
+    args = change_to_att1d3bhlf_from_1d3b(args)
+    args.attention_teacher = '1d3b_scratch'
+    args = name_keyword_change(
+            args, new_name='att1d3bhlfsch')
+    return args
