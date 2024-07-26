@@ -1,12 +1,15 @@
 import os
 import torch
 from functools import partial
+import pickle
 import importlib
 
 from typing import Union
 from megatron.training import get_args
 from megatron.training import print_rank_0
 from megatron.training import get_timers
+from megatron.training.checkpointing import load_checkpoint
+from megatron.training import get_model
 from megatron.training import get_tokenizer
 from megatron.core import mpu
 from megatron.core.enums import ModelType
@@ -30,6 +33,7 @@ from megatron.core.models.gpt.gpt_layer_specs import (
     get_gpt_layer_with_transformer_engine_spec,
     get_att_copy_gpt_layer_with_transformer_engine_spec,
 )
+from megatron.training.global_vars import set_args
 
 
 def model_provider(pre_process=True, post_process=True) -> Union[GPTModel, megatron.legacy.model.GPTModel]:
@@ -96,4 +100,32 @@ def model_provider(pre_process=True, post_process=True) -> Union[GPTModel, megat
             rotary_percent=args.rotary_percent,
         )
 
+        if attention_copy and (getattr(args, 'attention_teacher', None) is not None):
+            teacher_model = load_attention_teacher(args.attention_teacher)
+            model.teacher_model = teacher_model
     return model
+
+
+def load_attention_teacher(teacher_name):
+    orig_args = get_args()
+    megatron_meta_dir = '/om2/user/chengxuz/megatron_related'
+    if teacher_name in ['1d3b_frozen']:
+        teacher_args_path = os.path.join(
+                megatron_meta_dir, 'gpt_test_train/gpt2_1d7b/typical_args.pkl')
+        load_step = 440000
+    teacher_args = pickle.load(open(teacher_args_path, 'rb'))
+    teacher_args.return_qk = True
+    set_args(teacher_args)
+
+    teacher_model = get_model(
+            model_provider,
+            wrap_with_ddp=False)
+    teacher_args.iteration, teacher_args.num_floating_point_operations_so_far = load_checkpoint(
+        teacher_model, optimizer=None, opt_param_scheduler=None,
+        load_step=load_step)
+    teacher_model = teacher_model[0].module
+    if teacher_name in ['1d3b_frozen']:
+        for param in teacher_model.parameters():
+            param.requires_grad = False
+    set_args(orig_args)
+    return teacher_model

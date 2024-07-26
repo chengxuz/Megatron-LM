@@ -39,13 +39,17 @@ def main():
 
     args.attention_copy = True
     args.return_qk = False
+    args.kv_channels = 32
+    args.hidden_size = args.kv_channels * 32
+    args.ffn_hidden_size = args.hidden_size * 4
+    args.att_sub_method = 'layer_random_forth_6'
     set_args(args)
 
     model = get_model(
             model_provider,
             wrap_with_ddp=False)
     model = model[0]
-    model.teacher_model = teacher_model
+    model.module.teacher_model = teacher_model
 
     input_tokens = tokenizer.tokenize('I am a cat walking on a ')
     input_tokens = torch.from_numpy(np.asarray([input_tokens])).cuda()

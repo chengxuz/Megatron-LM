@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from importlib.metadata import version
 from typing import Union
 
+import ipdb
 import torch
 from pkg_resources import packaging
 
@@ -566,12 +567,15 @@ class AttCopySelfAttention(Attention):
         value, _ = self.linear_v(hidden_states)
 
         # [sq, b, hp] --> [sq, b, ng, (np/ng + 2) * hn]
-        new_tensor_shape = mixed_qkv.size()[:-1] + (
+        new_tensor_shape = value.size()[:-1] + (
             self.num_query_groups_per_partition,
             self.hidden_size_per_attention_head,
         )
         value = value.view(*new_tensor_shape)
         return value
+
+    def get_query_key_value_tensors(self, hidden_states, key_value_states=None):
+        pass
 
     def forward(
         self,

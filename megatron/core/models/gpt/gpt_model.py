@@ -18,6 +18,7 @@ from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_block import TransformerBlock, AttCopyTransformerBlock
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.utils import make_tp_sharded_tensor_for_checkpoint
+from megatron.legacy.model.module import fp32_to_float16
 
 
 class GPTModel(LanguageModule):
@@ -307,6 +308,9 @@ class AttCopyGPTModel(GPTModel):
                 packed_seq_params=packed_seq_params,
                 extra_block_kwargs=extra_block_kwargs,
                 )
+        if getattr(self.teacher_model, 'float16_convertor', None) is not None:
+            teacher_qs = fp32_to_float16(teacher_qs, self.teacher_model.float16_convertor)
+            teacher_ks = fp32_to_float16(teacher_ks, self.teacher_model.float16_convertor)
         att_sub_method = self.get_cfg_val('att_sub_method')
         if att_sub_method in self.att_layer_random_methods:
             teacher_qs = [

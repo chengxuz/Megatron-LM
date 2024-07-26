@@ -26,6 +26,7 @@ def parse_args(extra_args_provider=None, ignore_unknown_args=False):
 
     # Standard arguments.
     parser = _add_network_size_args(parser)
+    parser = _add_attention_copy_args(parser)
     parser = _add_regularization_args(parser)
     parser = _add_training_args(parser)
     parser = _add_initialization_args(parser)
@@ -744,10 +745,6 @@ def _add_network_size_args(parser):
     group.add_argument('--group-query-attention', action='store_true',
                           help='Use group-query attention.')
     group.add_argument('--num-query-groups', type=int, default=1)
-    group.add_argument('--return-qk', action='store_true',
-                       help='Whether query and key are returned by the model forward call')
-    group.add_argument('--attention-copy', action='store_true',
-                       help='Whether using query and key from another model')
 
     group.add_argument('--max-position-embeddings', type=int, default=None,
                        help='Maximum number of position embeddings to use. '
@@ -799,6 +796,18 @@ def _add_network_size_args(parser):
                        dest='bert_binary_head')
     group.add_argument('--untie-embeddings-and-output-weights', action='store_true',
                        help='Untie embeddings and output weights.'),
+    return parser
+
+def _add_attention_copy_args(parser):
+    group = parser.add_argument_group(title='attention copy')
+    group.add_argument('--return-qk', action='store_true',
+                       help='Whether query and key are returned by the model forward call')
+    group.add_argument('--attention-copy', action='store_true',
+                       help='Whether using query and key from another model')
+    group.add_argument('--att-sub-method', action='store', type=str, default=None,
+                       help='Attention sumsampling method')
+    group.add_argument('--attention-teacher', action='store', type=str, default=None,
+                       help='Teacher for the attention model')
     return parser
 
 def _add_straggler_detector_args(parser):

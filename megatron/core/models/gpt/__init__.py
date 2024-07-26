@@ -1,1 +1,1 @@
-from .gpt_model import GPTModel
+from .gpt_model import GPTModel, AttCopyGPTModel
