@@ -47,6 +47,14 @@ class AttCopySelfAttentionSubmodules:
     q_layernorm: Union[ModuleSpec, type] = None
     k_layernorm: Union[ModuleSpec, type] = None
 
+@dataclass
+class DebugAttCopySelfAttentionSubmodules:
+    linear_qkv: Union[ModuleSpec, type] = None
+    core_attention: Union[ModuleSpec, type] = None
+    linear_proj: Union[ModuleSpec, type] = None
+    q_layernorm: Union[ModuleSpec, type] = None
+    k_layernorm: Union[ModuleSpec, type] = None
+
 
 @dataclass
 class CrossAttentionSubmodules:
@@ -271,6 +279,7 @@ class Attention(MegatronModule, ABC):
         # =====================
         # Get the query, key and value tensors based on the type of attention -
         # self or cross attn.
+
         query, key, value = self.get_query_key_value_tensors(hidden_states, key_value_states)
 
         # ===================================================
@@ -564,10 +573,10 @@ class AttCopySelfAttention(Attention):
         """
         Derives `query`, `key` and `value` tensors from `hidden_states`.
         """
-        # Attention heads [sq, b, h] --> [sq, b, ng * (np/ng + 2) * hn)]
+        # Attention heads [sq, b, h] --> [sq, b, ng * hn]
         value, _ = self.linear_v(hidden_states)
 
-        # [sq, b, hp] --> [sq, b, ng, (np/ng + 2) * hn]
+        # [sq, b, hp] --> [sq, b, ng, hn]
         new_tensor_shape = value.size()[:-1] + (
             self.num_query_groups_per_partition,
             self.hidden_size_per_attention_head,
@@ -661,6 +670,188 @@ class AttCopySelfAttention(Attention):
                     dim=-1)
             core_attn_out = core_attn_out.reshape(
                     core_attn_out.shape[0], core_attn_out.shape[1], -1)
+        # =================
+        # Output. [sq, b, h]
+        # =================
+
+        output, bias = self.linear_proj(core_attn_out)
+
+        if self.get_cfg_val('return_qk'):
+            return output, bias, query, key
+        else:
+            return output, bias
+
+
+class DebugAttCopySelfAttention(Attention):
+    """Self-attention layer class
+
+    Self-attention layer takes input with size [s, b, h]
+    and returns output of the same size.
+    """
+
+    def __init__(
+        self,
+        config: TransformerConfig,
+        submodules: SelfAttentionSubmodules,
+        layer_number: int,
+        attn_mask_type=AttnMaskType.padding,
+    ):
+        super().__init__(
+            config=config,
+            submodules=submodules,
+            layer_number=layer_number,
+            attn_mask_type=attn_mask_type,
+            attention_type="self",
+        )
+
+        self.linear_qkv = build_module(
+            submodules.linear_qkv,
+            self.config.hidden_size,
+            self.query_projection_size + 2 * self.kv_projection_size,
+            config=self.config,
+            init_method=self.config.init_method,
+            gather_output=False,
+            bias=self.config.add_bias_linear or self.config.add_qkv_bias,
+            skip_bias_add=False,
+            is_expert=False,
+            tp_comm_buffer_name='qkv',
+        )
+
+        if submodules.q_layernorm is not None:
+            self.q_layernorm = build_module(
+                submodules.q_layernorm,
+                hidden_size=self.hidden_size_per_attention_head,
+                config=self.config,
+                eps=self.config.layernorm_epsilon,
+            )
+        else:
+            self.q_layernorm = None
+
+        if submodules.k_layernorm is not None:
+            self.k_layernorm = build_module(
+                submodules.k_layernorm,
+                hidden_size=self.hidden_size_per_attention_head,
+                config=self.config,
+                eps=self.config.layernorm_epsilon,
+            )
+        else:
+            self.k_layernorm = None
+
+    def get_query_key_value_tensors(self, hidden_states, key_value_states=None):
+        """
+        Derives `query`, `key` and `value` tensors from `hidden_states`.
+        """
+        # Attention heads [sq, b, h] --> [sq, b, ng * (np/ng + 2) * hn)]
+        mixed_qkv, _ = self.linear_qkv(hidden_states)
+
+        # [sq, b, hp] --> [sq, b, ng, (np/ng + 2) * hn]
+        new_tensor_shape = mixed_qkv.size()[:-1] + (
+            self.num_query_groups_per_partition,
+            (
+                (self.num_attention_heads_per_partition // self.num_query_groups_per_partition + 2)
+                * self.hidden_size_per_attention_head
+            ),
+        )
+        mixed_qkv = mixed_qkv.view(*new_tensor_shape)
+
+        split_arg_list = [
+            (
+                self.num_attention_heads_per_partition
+                // self.num_query_groups_per_partition
+                * self.hidden_size_per_attention_head
+            ),
+            self.hidden_size_per_attention_head,
+            self.hidden_size_per_attention_head,
+        ]
+
+        if SplitAlongDim is not None:
+
+            # [sq, b, ng, (np/ng + 2) * hn] --> [sq, b, ng, np/ng * hn], [sq, b, ng, hn], [sq, b, ng, hn]
+            (query, key, value) = SplitAlongDim(mixed_qkv, 3, split_arg_list,)
+        else:
+
+            # [sq, b, ng, (np/ng + 2) * hn] --> [sq, b, ng, np/ng * hn], [sq, b, ng, hn], [sq, b, ng, hn]
+            (query, key, value) = torch.split(mixed_qkv, split_arg_list, dim=3,)
+
+        # [sq, b, ng, np/ng * hn] -> [sq, b, np, hn]
+        query = query.reshape(query.size(0), query.size(1), -1, self.hidden_size_per_attention_head)
+
+        if self.q_layernorm is not None:
+            query = self.q_layernorm(query)
+
+        if self.k_layernorm is not None:
+            key = self.k_layernorm(key)
+
+        if self.config.test_mode:
+            self.run_realtime_tests()
+
+        return query, key, value
+
+    def forward(
+        self,
+        hidden_states,
+        query,
+        key,
+        attention_mask,
+        key_value_states=None,
+        inference_params=None,
+        rotary_pos_emb=None,
+        packed_seq_params=None,
+    ):
+        # hidden_states: [sq, b, h]
+
+        # For self attention we just duplicate the rotary_pos_emb if it isn't already
+        if rotary_pos_emb is not None and not isinstance(rotary_pos_emb, tuple):
+            rotary_pos_emb = (rotary_pos_emb,) * 2
+
+        # =====================
+        # Query, Key, and Value
+        # =====================
+        # Get the query, key and value tensors based on the type of attention -
+        # self or cross attn.
+
+        _, _, value = self.get_query_key_value_tensors(hidden_states, key_value_states)
+
+        # ===================================================
+        # Adjust key, value, and rotary_pos_emb for inference
+        # ===================================================
+        _, value, rotary_pos_emb, attn_mask_type = self._adjust_key_value_for_inference(
+            inference_params, key, value, rotary_pos_emb
+        )
+
+        if packed_seq_params is not None:
+            value = value.squeeze(1)
+
+        # ==================================
+        # core attention computation
+        # ==================================
+
+        if self.checkpoint_core_attention and self.training:
+            core_attn_out = self._checkpointed_attention_forward(
+                query,
+                key,
+                value,
+                attention_mask,
+                attn_mask_type=attn_mask_type,
+                packed_seq_params=packed_seq_params,
+            )
+        else:
+            core_attn_out = self.core_attention(
+                query,
+                key,
+                value,
+                attention_mask,
+                attn_mask_type=attn_mask_type,
+                packed_seq_params=packed_seq_params,
+            )
+
+        if packed_seq_params is not None:
+            # reshape to same output shape as unpacked case
+            # (t, np, hn) -> (t, b=1, h=np*hn)
+            # t is the pack size = sum (sq_i)
+            # note that batch is a dummy dimension in the packed case
+            core_attn_out = core_attn_out.reshape(core_attn_out.size(0), 1, -1)
+
         # =================
         # Output. [sq, b, h]
         # =================

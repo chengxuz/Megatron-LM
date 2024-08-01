@@ -5,6 +5,7 @@ from typing import Dict, Literal, Optional, Tuple, Union
 
 import numpy as np
 import torch
+import ipdb
 from torch import Tensor
 
 from megatron.core import InferenceParams, parallel_state, tensor_parallel
@@ -19,6 +20,7 @@ from megatron.core.transformer.transformer_block import TransformerBlock, AttCop
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.utils import make_tp_sharded_tensor_for_checkpoint
 from megatron.legacy.model.module import fp32_to_float16
+from megatron.training.global_vars import DEBUG
 
 
 class GPTModel(LanguageModule):
@@ -259,6 +261,7 @@ class AttCopyGPTModel(GPTModel):
         att_sub_method = self.get_cfg_val('att_sub_method')
         self.att_layer_random_methods = [
                 'layer_random_forth_6',
+                'layer_random',
                 ]
         if att_sub_method in self.att_layer_random_methods:
             if att_sub_method.endswith('_s1'):
@@ -272,8 +275,17 @@ class AttCopyGPTModel(GPTModel):
                         np.random.choice(
                             list(range(18, 24)),
                             self.config.num_layers))
+            elif att_sub_method in [
+                    'layer_random',
+                    ]:
+                self.att_sub_layer_rd_idxs = list(
+                        np.random.choice(
+                            self.config.num_layers,
+                            self.config.num_layers,
+                            replace=False))
             else:
                 raise NotImplementedError
+            print(self.att_sub_layer_rd_idxs)
 
     def get_block_class(self):
         return AttCopyTransformerBlock

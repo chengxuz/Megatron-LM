@@ -1,15 +1,4 @@
-import os
-
-
-def name_keyword_change(
-        args, new_name,
-        old_name='1d3b'):
-    args.save = args.save.replace(old_name, new_name)
-    args.load = args.load.replace(old_name, new_name)
-    os.system(f'mkdir -p {args.save}')
-    args.tensorboard_dir = args.tensorboard_dir.replace(old_name, new_name)
-    os.system(f'mkdir -p {args.tensorboard_dir}')
-    return args
+from .useful_funcs import name_keyword_change, change_to_1d3bhlf
 
 
 def change_to_1d7b_from_1d3b(args):
@@ -61,11 +50,17 @@ def change_to_att1d3bctl_from_1d3b(args):
     return args
 
 
-def change_to_att1d3bhlf_from_1d3b(args):
-    args.kv_channels = 32
-    args.hidden_size = args.kv_channels * 32
-    args.ffn_hidden_size = args.hidden_size * 4
+def change_to_att1d3bctltrn_from_1d3b(args):
+    args.attention_copy = True
+    args.attention_teacher = '1d3b'
+    args.micro_batch_size = 8
+    args = name_keyword_change(
+            args, new_name='att1d3bctltrn')
+    return args
 
+
+def change_to_att1d3bhlf_from_1d3b(args):
+    args = change_to_1d3bhlf(args)
     args.att_sub_method = 'layer_random_forth_6'
     args.attention_copy = True
     args.attention_teacher = '1d3b_frozen'
@@ -78,12 +73,14 @@ def change_to_att1d3bhlftrn_from_1d3b(args):
     args = change_to_att1d3bhlf_from_1d3b(args)
     args.attention_teacher = '1d3b'
     args = name_keyword_change(
-            args, new_name='att1d3bhlftrn')
+            args, new_name='att1d3bhlftrn',
+            old_name='att1d3bhlf')
     return args
 
 def change_to_att1d3bhlfsch_from_1d3b(args):
     args = change_to_att1d3bhlf_from_1d3b(args)
     args.attention_teacher = '1d3b_scratch'
     args = name_keyword_change(
-            args, new_name='att1d3bhlfsch')
+            args, new_name='att1d3bhlfsch',
+            old_name='att1d3bhlf')
     return args

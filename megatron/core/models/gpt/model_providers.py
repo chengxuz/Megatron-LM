@@ -32,8 +32,10 @@ from megatron.core.models.gpt.gpt_layer_specs import (
     get_gpt_layer_local_spec,
     get_gpt_layer_with_transformer_engine_spec,
     get_att_copy_gpt_layer_with_transformer_engine_spec,
+    get_debug_att_copy_gpt_layer_with_transformer_engine_spec,
 )
 from megatron.training.global_vars import set_args
+from megatron.training.global_vars import DEBUG
 
 
 def model_provider(pre_process=True, post_process=True) -> Union[GPTModel, megatron.legacy.model.GPTModel]:
@@ -77,8 +79,13 @@ def model_provider(pre_process=True, post_process=True) -> Union[GPTModel, megat
                     transformer_layer_spec = get_gpt_layer_with_transformer_engine_spec(
                             args.num_experts, args.moe_grouped_gemm, args.qk_layernorm)
                 else:
-                    transformer_layer_spec = get_att_copy_gpt_layer_with_transformer_engine_spec(
-                            args.num_experts, args.moe_grouped_gemm, args.qk_layernorm)
+                    if not DEBUG:
+                        transformer_layer_spec = get_att_copy_gpt_layer_with_transformer_engine_spec(
+                                args.num_experts, args.moe_grouped_gemm, args.qk_layernorm)
+                    else:
+                        print('Debug Att Copy')
+                        transformer_layer_spec = get_debug_att_copy_gpt_layer_with_transformer_engine_spec(
+                                args.num_experts, args.moe_grouped_gemm, args.qk_layernorm)
             else:
                 transformer_layer_spec = get_gpt_layer_local_spec(args.num_experts, args.moe_grouped_gemm, args.qk_layernorm)
 

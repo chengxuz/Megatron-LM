@@ -26,6 +26,7 @@ from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.transformer_layer import BaseTransformerLayer, TransformerLayer
 from megatron.core.transformer.utils import sharded_state_dict_default
 from megatron.core.utils import make_sharded_tensor_for_checkpoint, make_viewless_tensor
+from megatron.training.global_vars import DEBUG
 
 
 def get_num_layers_to_build(config: TransformerConfig) -> int:
