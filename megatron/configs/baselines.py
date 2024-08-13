@@ -1,4 +1,5 @@
 from .useful_funcs import name_keyword_change, change_to_1d3bhlf
+from . import useful_funcs
 
 
 def change_to_1d7b_from_1d3b(args):
@@ -18,13 +19,17 @@ def change_to_w1d7b_from_1d3b(args):
     return args
 
 def change_to_2d7b_from_1d3b(args):
-    args.num_layers = 32
-    args.hidden_size = 2560
-    args.micro_batch_size = 8
-    args.kv_channels = 2560 // 32
-    args.ffn_hidden_size = 10240
+    args = useful_funcs.change_to_2d7b(args)
     args = name_keyword_change(
             args, new_name='2d7b')
+    return args
+
+def change_to_2d7bftn_from_1d3b(args):
+    args = useful_funcs.change_to_2d7b(args)
+    args.finetune = True
+    args.pretrained_checkpoint = "/om2/user/chengxuz/megatron_related/gpt_test_train/gpt2_2d7b/ckpts"
+    args = name_keyword_change(
+            args, new_name='2d7bftn')
     return args
 
 

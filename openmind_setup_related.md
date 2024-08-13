@@ -22,6 +22,17 @@ Preprocess command is:
 python tools/preprocess_data.py --input "/om2/group/evlab/llm_dataset/Megatron_datasets/sw_150M_raw.json" --output-prefix "sw_150M_gpt2" --vocab-file gpt2-vocab.json  --tokenizer-type GPT2BPETokenizer --merge-file gpt2-merges.txt --append-eod
 ```
 
+### Pile data preprocess
+
+First run the `tools/build_datasets/pile_to_json.py` to download the splits into json files.
+
+Then run the `tools/build_datasets/combine_pile_jsons.py` to combine the small jsons into one large jsons. The `num_splits` argument in the file needs to be correspondingly adjusted.
+
+Then run this:
+```
+python tools/preprocess_data.py --input "/om2/group/evlab/llm_dataset/Megatron_datasets/pile/hf_dedp_data/pile_up_to_165-of-01650.json" --output-prefix "/om2/group/evlab/llm_dataset/Megatron_datasets/pile/hf_dedp_data/pile_up_to_165-of-01650" --vocab-file "/om2/user/chengxuz/megatron_related/gpt_ckpts/gpt2-vocab.json"  --tokenizer-type GPT2BPETokenizer --merge-file "/om2/user/chengxuz/megatron_related/gpt_ckpts/gpt2-merges.txt" --append-eod  --workers 10
+```
+
 ## Test train
 
 ```
