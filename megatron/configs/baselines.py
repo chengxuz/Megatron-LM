@@ -26,8 +26,10 @@ def change_to_2d7b_from_1d3b(args):
 
 def change_to_2d7bftn_from_1d3b(args):
     args = useful_funcs.change_to_2d7b(args)
-    args.finetune = True
-    args.pretrained_checkpoint = "/om2/user/chengxuz/megatron_related/gpt_test_train/gpt2_2d7b/ckpts"
+
+    # need to turn off the finetune after starting
+    #args.finetune = True
+    #args.pretrained_checkpoint = "/om2/user/chengxuz/megatron_related/gpt_test_train/gpt2_2d7b/ckpts"
     args = name_keyword_change(
             args, new_name='2d7bftn')
     return args
